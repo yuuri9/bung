@@ -447,12 +447,27 @@ sendws(int fd, WSFrame* frame){
 	pck = frame->len<126?(frame->len):(frame->len<65536?126:127);
 	pck |= (frame->mask << 7);
 	write(p[0], &pck, 1);
-	if(frame->len < 65536 && frame->len > 125)
-		write(p[0], &frame->len, 2);
-	if(frame->len > 65536)
-		write(p[0], &frame->len, 8);
-	if(frame->mask > 0)
-		write(p[0], &frame->key, 4);
+	if(frame->len < 65536 && frame->len > 125){
+		for(i=0;i<2;++i){
+			pck = (frame->len >> ((1 - i) * 8)) & 0xFF;
+			write(p[0], &pck, 1);
+
+		}
+	}
+	if(frame->len > 65536){
+		for(i=0;i<8;++i){
+			pck = (frame->len >> ((7 - i) * 8)) & 0xFF;
+			write(p[0], &pck, 1);
+
+		}
+	}
+	if(frame->mask > 0){
+		for(i=0;i<4;++i){
+			pck = (frame->key >> ((3 - i) * 8)) & 0xFF;
+			write(p[0], &pck, 1);
+
+		}
+	}
 	write(p[0], frame->buf, frame->len);
 
 	for(i=0;i<n;++i){
@@ -508,7 +523,7 @@ recvframe(Biobuf* net){
 		ret->buf = (char*)calloc(ret->len + 1, sizeof(char));
 		if(ret->mask > 0){
 			for(i=0;i<ret->len;++i)
-				ret->buf[i] = Bgetc(net) ^ ((ret->key >> ((i%4)*8))&0xFF);
+				ret->buf[i] = Bgetc(net) ^ ((ret->key >> ((3-(i%4))*8))&0xFF);
 		}
 		else{
 			for(i=0;i<ret->len;++i)
@@ -682,7 +697,7 @@ parsecmd(char* cmd, int len){
 		ret->mask = 1;
 		ret->key = lrand();
 		for(i=0;i<ret->len;++i)
-			ret->buf[i] = tok[i] ^ ((ret->key >> (8*( i%4)))& 0xFF);
+			ret->buf[i] = tok[i] ^ ((ret->key >> (8*(3-( i%4))))& 0xFF);
  
 
 	}
@@ -756,7 +771,7 @@ wsproc(void* arg){
 								sndfrm->len = frame->len;
 								sndfrm->buf = (char*)calloc(sndfrm->len + 1, sizeof(char));
 								for(i=0;i<sndfrm->len;++i)
-									sndfrm->buf[i] = frame->buf[i] ^ (sndfrm->key >> (( (i%4)*8)&0xFF));
+									sndfrm->buf[i] = frame->buf[i] ^ (sndfrm->key >> (( (3-(i%4))*8)&0xFF));
 								sndfrm->buf[sndfrm->len] = '\0';
 								fprint(1, "SENDING FRAME: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", sndfrm->fin, sndfrm->op, sndfrm->mask, sndfrm->len, sndfrm->key);
  
