@@ -69,7 +69,7 @@ enum{
 	WPONG = 0xA,
 	WTEXT = 0x1,
 	WBIN = 0x2,
-	WHUP = 0x8, /*Technically wrong, but sockjs doesn't give a shit*/
-	WBAD = 0x4, /*What even does this signal, fucking sockjs*/
+	WHUP = 0x8,  
+	WBAD = 0x4,  
 	WCONT = 0x0,
 };

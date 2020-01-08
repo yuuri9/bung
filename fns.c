@@ -635,7 +635,7 @@ consfn(void* arg){
 WSFrame*
 parsecmd(char* cmd, int len){
 	WSFrame* ret;
-	int i;
+	int i,j;
 	char* tok;
 
 	ret = calloc(1, sizeof(WSFrame));
@@ -664,7 +664,13 @@ parsecmd(char* cmd, int len){
 	}
 	ret->len = atoi(tok);
 	i += strlen(tok);
-	tok = strtok(0, " ");
+	for(j=0;tok[j] != '\0';++j);
+	if(j+i + 1>len){
+		ret->err = 1;
+		return ret;
+	}
+
+	tok = &tok[j+1];
 	if(tok == 0 || ret->len > (len - i)){
 		ret->err = 1;
 		return ret;
@@ -677,9 +683,7 @@ parsecmd(char* cmd, int len){
 		ret->key = lrand();
 		for(i=0;i<ret->len;++i)
 			ret->buf[i] = tok[i] ^ ((ret->key >> (8*( i%4)))& 0xFF);
-		fprint(1, "SENDING STR:");
-		write(1, ret->buf, ret->len);
-		fprint(1, "\n");
+ 
 
 	}
 	ret->err = 0;
@@ -755,8 +759,7 @@ wsproc(void* arg){
 									sndfrm->buf[i] = frame->buf[i] ^ (sndfrm->key >> (( (i%4)*8)&0xFF));
 								sndfrm->buf[sndfrm->len] = '\0';
 								fprint(1, "SENDING FRAME: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", sndfrm->fin, sndfrm->op, sndfrm->mask, sndfrm->len, sndfrm->key);
-								if(sndfrm->len > 0)
-										fprint(1, "DATA: %s \n", sndfrm->buf);
+ 
 								sendp(sndc, sndfrm);
 								sendp(sndc, &fd);
 
@@ -770,15 +773,6 @@ wsproc(void* arg){
 								threadkill(chl[0]);
 								threadkill(chl[1]);
 								sendul(q, 42069);
-								chanclose(rcvc);
-								chanfree(rcvc);
-								chanclose(sndc);
-								chanfree(sndc);
-								chanclose(sv);
-								chanfree(sv);
-								chanclose(rv);
-								chanfree(rv);
-								freewsf(frame);
 		 						threadexits(nil);
 								break;
 							}
@@ -788,15 +782,6 @@ wsproc(void* arg){
 						threadkill(chl[0]);
 						threadkill(chl[1]);
 						sendul(q, 42069);
-						chanclose(rcvc);
-						chanfree(rcvc);
-						chanclose(sndc);
-						chanfree(sndc);
-						chanclose(sv);
-						chanfree(sv);
-						chanclose(rv);
-						chanfree(rv);
-						freewsf(frame);
 	 					threadexits(nil);
 						break;
 				}
@@ -809,8 +794,6 @@ wsproc(void* arg){
 					sndfrm = parsecmd(cmd, h);
 					if(sndfrm->err == 0){
 						fprint(1, "SENDING FRAME: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", sndfrm->fin, sndfrm->op, sndfrm->mask, sndfrm->len, sndfrm->key);
-						if(sndfrm->len > 0)
-							fprint(1, "DATA: %s \n", sndfrm->buf);
 						sendp(sndc, sndfrm);
 						sendp(sndc, &fd);
 					}
