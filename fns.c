@@ -475,17 +475,16 @@ recvframe(Biobuf* net){
 		ret->err = -1;
 		return ret;
 	}
-	fprint(1, "I = %016x\n", i);
-	ret->fin = (i&0x80)>>7;
+ 	ret->fin = (i&0x80)>>7;
 	ret->op = i&0xF;
 	i = Bgetc(net);
 	ret->mask = (i&0x80)>>7;
 
-	if((i&0xEF)<126){
+	if((i&0x7F)<126){
 		ret->len = i&0x7F;
  
 	}
-	else if((i&0xEF)<127){
+	else if((i&0x7F)<127){
 		ret->len = Bgetc(net)<<8;
  		ret->len |= Bgetc(net);
  	}
@@ -693,6 +692,8 @@ wsproc(void* arg){
 	int Key,fd,i, chl[2];
 	Biobuf* net;
 	WSFrame* frame, *sndfrm;
+	WSFramel* stack, top;
+
 	char* cmd;
 
 	c = arg;
