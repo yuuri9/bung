@@ -436,8 +436,6 @@ sendws(int fd, WSFrame* frame){
 
 	pipe(p);
 	net = Bfdopen(p[1], OREAD);
-		if(frame->len > 0)
-			fprint(1, "DATA: %s \n", frame->buf);
 
 
 	n= 2 + (frame->mask>0?4:0) + (frame->len>65535?8:frame->len>125?2:0) + frame->len;
@@ -477,18 +475,20 @@ recvframe(Biobuf* net){
 		ret->err = -1;
 		return ret;
 	}
+	fprint(1, "I = %016x\n", i);
 	ret->fin = (i&0x80)>>7;
 	ret->op = i&0xF;
 	i = Bgetc(net);
 	ret->mask = (i&0x80)>>7;
 
 	if((i&0xEF)<126){
-		ret->len = i&0xEF;
+		ret->len = i&0x7F;
+ 
 	}
 	else if((i&0xEF)<127){
 		ret->len = Bgetc(net)<<8;
-		ret->len |= Bgetc(net);
-	}
+ 		ret->len |= Bgetc(net);
+ 	}
 	else{
 		ret->len = 0;
 		for(i=0;i<8;++i){
@@ -732,6 +732,12 @@ wsproc(void* arg){
 					case 1:
 						frame = recvp(rcvc);
 						fprint(1, "FRAME RECIEVED: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", frame->fin, frame->op, frame->mask, frame->len, frame->key);
+							if(frame->len > 0){
+								fprint(1, "RECIEVED FRAME: ");
+								write(1, frame->buf, frame->len);
+								fprint(1, "\n");
+
+							}
 
 						switch(frame->op){
 							case WPONG:
@@ -757,9 +763,26 @@ wsproc(void* arg){
 							case WTEXT:
  								fprint(1,"TEXT RECIEVED: %s\n",frame->buf);
  								break;
-						}
-						freewsf(frame);
-						break;
+							case WHUP:
+							case WBAD:
+								fprint(1, "HUNG UP: %s\n", frame->buf);
+								threadkill(chl[0]);
+								threadkill(chl[1]);
+								sendul(q, 42069);
+								chanclose(rcvc);
+								chanfree(rcvc);
+								chanclose(sndc);
+								chanfree(sndc);
+								chanclose(sv);
+								chanfree(sv);
+								chanclose(rv);
+								chanfree(rv);
+								freewsf(frame);
+		 						threadexits(nil);
+								break;
+							}
+							freewsf(frame);
+							break;
 					case 2:
 						threadkill(chl[0]);
 						threadkill(chl[1]);
