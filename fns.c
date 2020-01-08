@@ -468,7 +468,8 @@ sendws(int fd, WSFrame* frame){
 
 		}
 	}
-	write(p[0], frame->buf, frame->len);
+	if(frame->len > 0)
+		write(p[0], frame->buf, frame->len);
 
 	for(i=0;i<n;++i){
 		buf[i/4] |= Bgetc(net)<<((i%4)*8);
@@ -639,7 +640,7 @@ consfn(void* arg){
 		//ADD HELP FN DICKBAG
 		consinbuf = Brdstr(cons, '\n', 1);
 		if(Blinelen(cons) > 3 && cistrncmp(consinbuf,"help",4) == 0 )
-			fprint(p[1], "halt\nsendtf fin op len buf\n");
+			fprint(p[1], "\thalt\n\tsendtf fin op len buf\n");
 		
 		else if(Blinelen(cons)){
 			sendul(v, Blinelen(cons));
@@ -654,6 +655,9 @@ parsecmd(char* cmd, int len){
 	char* tok;
 
 	ret = calloc(1, sizeof(WSFrame));
+
+	ret->mask = 1;
+	ret->key = lrand();
 
 	i = 0;
 	tok = strtok(cmd, " "); /*sendtf*/
@@ -678,6 +682,9 @@ parsecmd(char* cmd, int len){
 		return ret;
 	}
 	ret->len = atoi(tok);
+	if(ret->len == 0)
+		return ret;
+
 	i += strlen(tok);
 	for(j=0;tok[j] != '\0';++j);
 	if(j+i + 1>len){
@@ -694,8 +701,6 @@ parsecmd(char* cmd, int len){
 	/*One could send a ret->len bigger than len - preceeding fields, creating a buffer of len instead of ret->len ensures it will be 0ed*/
 	if(ret->len > 0){
 		ret->buf = calloc(len, sizeof(char));
-		ret->mask = 1;
-		ret->key = lrand();
 		for(i=0;i<ret->len;++i)
 			ret->buf[i] = tok[i] ^ ((ret->key >> (8*(3-( i%4))))& 0xFF);
  
