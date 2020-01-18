@@ -13,6 +13,8 @@ struct Post {
 	char* name;
 	char* pnum;
 	char* msg;
+	uint bl;
+	char** blinks;
 };
 struct Chunk{
 	char* str;
@@ -32,9 +34,9 @@ struct WSFrame{
 	char* buf;
 };
 struct WSFramel{
-	WSFrame;
+	WSFrame* elm;
 	WSFramel* next;
-	int fin;
+	int end;
 };
 enum {
 	IBackground,
@@ -49,6 +51,7 @@ enum {
 };
 enum {
 	KEYL = 10,
+	MAXCONNS = 63,
 };
 enum {
 	EGENERIC,
@@ -64,7 +67,7 @@ enum {
 	EHTML,
 	EHTMLINVALID,
 };
-enum{
+enum {
 	WPING = 0x9,
 	WPONG = 0xA,
 	WTEXT = 0x1,
@@ -72,4 +75,49 @@ enum{
 	WHUP = 0x8,  
 	WBAD = 0x4,  
 	WCONT = 0x0,
+};
+
+/*Imported*/
+enum {
+	MGINVALID = 0,
+	MGINSERT_POST = 2,
+	MGUPDATE_POST = 3,
+	MGFINISH_POST = 4,
+	// Legacy?
+	MGCATCH_UP = 5,
+	MGINSERT_IMAGE = 6,
+	MGSPOILER_IMAGES = 7,
+	MGDELETE_IMAGES = 8,
+	MGDELETE_POSTS = 9,
+	MGDELETE_THREAD = 10,
+	MGLOCK_THREAD = 11,
+	MGUNLOCK_THREAD = 12,
+	MGREPORT_POST = 13,
+
+	MGIMAGE_STATUS = 31,
+	MGSYNCHRONIZE = 32,
+	MGEXECUTE_JS = 33,
+	MGUPDATE_BANNER = 35,
+	MGONLINE_COUNT = 37,
+	MGHOT_INJECTION = 38,
+	MGNOTIFICATION = 39,
+	MGRADIO = 40,
+	MGRESYNC = 41,
+
+	MGMODEL_SET = 50,
+	MGCOLLECTION_RESET = 55,
+	MGCOLLECTION_ADD = 56,
+	MGSUBSCRIBE = 60,
+	MGUNSUBSCRIBE = 61,
+	MGGET_TIME = 62,
+
+	MGINPUT_ROOM = 20,
+	MGMAX_POST_LINES = 30,
+	MGMAX_POST_CHARS = 2000,
+	MGWORD_LENGTH_LIMIT = 300,
+
+	MGS_NORMAL = 0,
+	MGS_BOL = 1,
+	MGS_QUOTE = 2,
+	MGS_SPOIL = 3
 };

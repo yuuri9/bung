@@ -23,3 +23,6 @@ void
 wsproc(void* arg);
 void
 consfn(void* arg);
+void
+jsondriver(void* arg);
+

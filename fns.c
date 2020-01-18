@@ -19,31 +19,6 @@
 
 
 void
-drawpost(Post* post, Image* canvas, Image** colors, Font* font){
-	Point sp;
-	draw(canvas, Rect(canvas->r.min.x,canvas->r.min.y,canvas->r.max.x,canvas->r.max.y),colors[IBackground],nil,ZP);
-	draw(canvas, Rect(canvas->r.min.x + 100, canvas->r.min.y + 100 , canvas->r.max.x - 100, canvas->r.max.y-100), colors[IPost], nil, ZP);
-	sp = string( canvas, Pt(canvas->r.min.x+100, canvas->r.min.y + 100)  , colors[IName] , colors[IName]->r.min , font , post->name);
-	sp = string(canvas, sp, colors[IText], colors[IText]->r.min, font, " ");
-	sp = string(canvas, sp, colors[IText], colors[IText]->r.min, font, post->date);
-	sp = string(canvas, sp, colors[IText], colors[IText]->r.min, font, " No. ");
-	sp = string(canvas, sp, colors[IText], colors[IText]->r.min, font, post->pnum);
-
-	sp = string(canvas, Pt(canvas->r.min.x+120, canvas->r.min.y+190), colors[IText], colors[IText]->r.min, font, post->msg);
-
-
-
-}
-
-void
-eresized(int New){
-	if(New && getwindow(display, Refmesg) < 0){
-		
-		threadexitsall("Getwindow Error");
-	}
-}
-
-void
 utimer(void* arg){
 	Channel* c;
 	c = arg;
@@ -53,40 +28,6 @@ utimer(void* arg){
 	}
 }
 
-void
-kbdfsio(void* arg){
-	Channel* c;
-	Biobuf* buf;
-	char* strn;
-	char* strpt;
-	uint strptn;
-	uint i;
-	uint t;
-	c = arg;
-
- 	buf = Bopen("/dev/kbd", OREAD);
-
-	/*The dance t does here is required since the first keydown sends both hit and repeat signal*/
-	/*This is sendul instead of chanprint because each down key needs to trigger the alt*/
-
-	for(strptn=0,t=0;;strn = Brdstr(buf, '\0', 1)){
-		if(Blinelen(buf) > 0 ){
-			if(strn[0] == 'k' || strn[0] == 'K'){
-				strpt = strn;
-				strptn = Blinelen(buf);
-				t = 0;
-			}
-			if(t==0 && strn[0] == 'c')
-				t = 1;
-			if(t == 1){
-				for(i=1;i<strptn;++i){
-					sendul(c, strpt[i]);
-				}
-			}
-		}
-	}
-
-}
 
 /*Taken from webfs/http.c */
 int
@@ -152,13 +93,11 @@ readhttp(Biobuf* net, long* resp ){
 
 		if(Blinelen(net) > 16 && (cistrncmp(linestr, "content-length:", 15) == 0)){
 			cl = atoi(&linestr[16]);
-			fprint(1, "CL: %ld\n", cl);
 		}
 		if(Blinelen(net) > 26 && (cistrncmp(linestr, "Transfer-Encoding: chunked", 26) ==0))
 			cl = -1;
 
 
-		fprint(1, "%d ||| %s\n", Blinelen(net), linestr);
 		if(Blinelen(net) > 13 && (cistrncmp(linestr, "content-type:",13) == 0)){
 			ct = Blinelen(net);
 			ctyp = nnl;
@@ -232,7 +171,6 @@ sumchunks(Chunk* root){
 		else
 			break;
 	}
-	fprint(1, "CHUNK SIZE: %ld\n", len);
 	ret = (char*)calloc(len + 1, sizeof(char));
 	ret[len] = '\0';
 	for(tail = root, rpos = ret;;){
@@ -264,7 +202,6 @@ recvcontent(Biobuf* net, long cl){
 	if(cl > 0){
 		buf = (char*)calloc(cl + 2, sizeof(buf));
 
-		fprint(1, "CONTENTLENGTH: %ld\n", cl);
 
 		Bgetc(net);
 		for(i=0;i<cl;++i){
@@ -284,8 +221,6 @@ recvcontent(Biobuf* net, long cl){
 				linestr = &linestr[1];
 			*/
 			cl = strtol(&linestr[1],nil,16);
-			fprint(2, "%s\n", &linestr[1]);
-			fprint(2, "LINELEN: %ld\n", cl);
 			free(linestr);
 
 			if(cl==0)
@@ -297,7 +232,6 @@ recvcontent(Biobuf* net, long cl){
 				linestr = &linestr[1];
 			*/
 
-			fprint(2, "LINE: %d\n", Blinelen(net));
 
 			if(Blinelen(net) != (cl + 1))
 				return nil;
@@ -549,7 +483,6 @@ recvheaders(Biobuf* net){
 			nnl = buf;
 
 		if(Blinelen(net) > 1){
-			fprint(1,"%d ||| %s\n",Blinelen(net), buf[0]=='\n'?&buf[1]:buf);
 		}
 		else{
 			free(nnl);
@@ -560,7 +493,11 @@ recvheaders(Biobuf* net){
 			switch(i){
 				case 101:
 					break;
+
+				case 301:
+					fprint(2,"MOVED PERMANENTLY: %s\n",buf);
 				default:
+					free(nnl);
 					return EHTMLINVALID;
 
 			}
@@ -571,6 +508,8 @@ recvheaders(Biobuf* net){
 	Bgetc(net);
 	return EOK;
 }
+
+/*Procs which do I/O must be procs and not threads*/
 void
 rcvproc(void* arg){
 	Channel* v,*c;
@@ -716,7 +655,11 @@ wsproc(void* arg){
 	int Key,fd,i, chl[2];
 	Biobuf* net;
 	WSFrame* frame, *sndfrm;
-	WSFramel* stack, top;
+	uint wsfdep;
+	WSFramel* stack, *cur;
+
+
+	wsfdep = 0;
 
 	char* cmd;
 
@@ -756,14 +699,72 @@ wsproc(void* arg){
  				switch(r){
 					case 1:
 						frame = recvp(rcvc);
-						fprint(1, "FRAME RECIEVED: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", frame->fin, frame->op, frame->mask, frame->len, frame->key);
-							if(frame->len > 0){
-								fprint(1, "RECIEVED FRAME: ");
-								write(1, frame->buf, frame->len);
-								fprint(1, "\n");
+
+
+						/*WARNING: UNTESTED, COULD NOT FIND DISCONTINUOUS REPEATER TEST*/
+						if(frame->fin != 1){
+							cur = calloc(1, sizeof(WSFramel));
+							cur->elm = frame;
+							if(wsfdep++ == 0){
+								cur->end = 1;
+								stack = cur;
 
 							}
+							else{
+								cur->end = 0;
+								cur->next = stack;
+								stack = cur;
 
+							}
+							break;
+						}
+						if(wsfdep != 0){
+							wsfdep = 0;
+
+							cur = calloc(1, sizeof(WSFramel));
+							cur->elm = frame;
+							cur->end = 0;
+							cur->next = stack;
+							stack = cur;
+
+							for(i=0, cur = stack;cur->end !=1;cur = cur->next){
+								i += cur->elm->len;
+								if(cur->elm->op != cur->next->elm->op){
+									i = -1;
+									break;
+
+								}
+
+							}
+							if(i==-1){
+								for(i=0, cur = stack;cur->end !=1;){
+									freewsf(cur->elm);
+									stack = cur;
+									cur = cur->next;
+									free(stack);
+								}
+								freewsf(cur->elm);
+								free(cur);
+								break;
+							}
+							i += cur->elm->len;
+							frame = calloc(1, sizeof(WSFrame));
+							frame->len = i;
+							frame->buf = calloc(i+1, sizeof(char));
+							for(cur = stack;cur->end !=1;){
+								i -= cur->elm->len;
+								strncpy(&frame->buf[i],cur->elm->buf, cur->elm->len);
+								freewsf(cur->elm);
+								stack = cur;
+								cur = cur->next;
+								free(stack);
+
+							}
+							i -= cur->elm->len;
+							strncpy(&frame->buf[i],cur->elm->buf, cur->elm->len);
+							freewsf(cur->elm);
+							free(cur);
+						}
 						switch(frame->op){
 							case WPONG:
 								break;
@@ -778,18 +779,15 @@ wsproc(void* arg){
 								for(i=0;i<sndfrm->len;++i)
 									sndfrm->buf[i] = frame->buf[i] ^ (sndfrm->key >> (( (3-(i%4))*8)&0xFF));
 								sndfrm->buf[sndfrm->len] = '\0';
-								fprint(1, "SENDING FRAME: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", sndfrm->fin, sndfrm->op, sndfrm->mask, sndfrm->len, sndfrm->key);
  
 								sendp(sndc, sndfrm);
 								sendp(sndc, &fd);
 
 								break;
 							case WTEXT:
- 								fprint(1,"TEXT RECIEVED: %s\n",frame->buf);
  								break;
 							case WHUP:
 							case WBAD:
-								fprint(1, "HUNG UP: %s\n", frame->buf);
 								threadkill(chl[0]);
 								threadkill(chl[1]);
 								sendul(q, 42069);
@@ -809,11 +807,9 @@ wsproc(void* arg){
 
 			case 2:
 				cmd = recvp(c);
-				fprint(1, "LEN: %d, STRN: %s\n", h, cmd);
 				if(h>7 && strncmp(cmd, "sendtf ",7) == 0){
 					sndfrm = parsecmd(cmd, h);
 					if(sndfrm->err == 0){
-						fprint(1, "SENDING FRAME: FIN: %d OP: %ulx MASK: %d LEN: %ulld KEY: %ulx \n", sndfrm->fin, sndfrm->op, sndfrm->mask, sndfrm->len, sndfrm->key);
 						sendp(sndc, sndfrm);
 						sendp(sndc, &fd);
 					}
@@ -826,4 +822,41 @@ wsproc(void* arg){
 				break;
 		}
 	}
+}
+
+
+void
+jsondriver(void* arg){
+	Channel* c, *v, *s, *t;
+	JSON* gcnf[MAXCONNS], *dbst[MAXCONNS];
+	uint conn;
+	int Key,i;
+	char* conns[MAXCONNS], *cmd;
+	uint cl[MAXCONNS];
+	ulong r, q;
+
+	for(i=0;i<MAXCONNS;++i)
+		cl[i] = 0;
+
+	conn = 0;
+	c = arg;
+	v = recvp(c);
+
+	Alt a[] = {
+		{v, &r, CHANRCV},
+		{s, &q, CHANRCV},
+		{nil,nil,CHANEND},
+	};
+
+	for(;;){
+		Key = alt(a);
+		
+		switch(Key){
+			case 0:
+				cmd = recvp(c);
+				break;
+
+		}
+	}
+
 }
