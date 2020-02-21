@@ -2,6 +2,7 @@ typedef struct Post Post;
 typedef struct Chunk Chunk;
 typedef struct WSFrame WSFrame;
 typedef struct WSFramel WSFramel;
+typedef struct Site Site;
 
 struct Post {
 	uint error;
@@ -16,6 +17,13 @@ struct Post {
 	uint bl;
 	char** blinks;
 };
+struct Site{
+	char* dialstr;
+	char* addrstr;
+	JSON* config;
+	Biobuf* net;
+};
+
 struct Chunk{
 	char* str;
 	long len;
@@ -66,6 +74,7 @@ enum {
 	EJSONINVALID,
 	EHTML,
 	EHTMLINVALID,
+	EDIALFAIL,
 };
 enum {
 	WPING = 0x9,

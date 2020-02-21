@@ -656,6 +656,7 @@ wsproc(void* arg){
 	Biobuf* net;
 	WSFrame* frame, *sndfrm;
 	uint wsfdep;
+	/*WSFrame stack untested, no testbeds that could be found did discontinuous websocket frames*/
 	WSFramel* stack, *cur;
 
 
@@ -700,6 +701,9 @@ wsproc(void* arg){
 					case 1:
 						frame = recvp(rcvc);
 
+						fprint(1, "FRAMEREC: OP: %d LEN: %d\n", frame->op, frame->len);
+						if(frame->len > 0)
+							fprint(1, "PAYLOAD: %s\n", frame->buf);
 
 						/*WARNING: UNTESTED, COULD NOT FIND DISCONTINUOUS REPEATER TEST*/
 						if(frame->fin != 1){
@@ -785,6 +789,7 @@ wsproc(void* arg){
 
 								break;
 							case WTEXT:
+								fprint(2, "%s\n", frame->buf);
  								break;
 							case WHUP:
 							case WBAD:
@@ -823,40 +828,34 @@ wsproc(void* arg){
 		}
 	}
 }
-
-
 void
 jsondriver(void* arg){
-	Channel* c, *v, *s, *t;
-	JSON* gcnf[MAXCONNS], *dbst[MAXCONNS];
-	uint conn;
-	int Key,i;
-	char* conns[MAXCONNS], *cmd;
-	uint cl[MAXCONNS];
-	ulong r, q;
+	Channel* c, *v, *cons, *consp;
+	char* cmd;
+ 	Site conns[MAXCONNS];
+	uint rcv, ccv;
 
-	for(i=0;i<MAXCONNS;++i)
-		cl[i] = 0;
-
-	conn = 0;
 	c = arg;
 	v = recvp(c);
 
 	Alt a[] = {
-		{v, &r, CHANRCV},
-		{s, &q, CHANRCV},
+		{v, &rcv, CHANRCV},
+		{consp, &ccv, CHANRCV},
 		{nil,nil,CHANEND},
+
 	};
-
 	for(;;){
-		Key = alt(a);
-		
-		switch(Key){
-			case 0:
-				cmd = recvp(c);
-				break;
+	switch(alt(a)){
 
-		}
+		case 1:
+			cmd = recvp(cons);
+
+
+			free(cmd);
+			break;
+	
+
+	}
 	}
 
 }

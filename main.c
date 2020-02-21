@@ -95,6 +95,7 @@ threadmain(int argc, char** argv){
 		Key = alt(a);
 		switch(Key){
 			case 0:
+				fprint(2, "MOUES: %d\n", Mouse.buttons);
 				break;
 			case 1:
 				eresized(1);

@@ -65,8 +65,9 @@ threadmain(int argc, char** argv){
 			break;
 	}ARGEND
 
-
+	JSONfmtinstall();
 	srand(nsec());
+
 	seckey = (char*)calloc(80, sizeof(char));
 	enc64(seckey, 80, msg, 8);
 	server_id = rand() % 1000;
@@ -93,6 +94,37 @@ threadmain(int argc, char** argv){
 	}
 
 
+	conu = chancreate(sizeof(ulong),0);
+	condat = chancreate(sizeof(char*), 0);
+	conspid = proccreate(consfn, condat, 8192);
+	sendp(condat, conu);
+	sendp(condat, cons);
+
+	v = chancreate(sizeof(ulong), 0);
+	c = chancreate(sizeof(char*),0);
+	proccreate(jsondriver, c,1024000);
+
+	sendp(c,v);
+	Alt a[] = {
+		{v, &wsr, CHANRCV},
+		{conu, &csr, CHANRCV},
+		{nil,nil,CHANEND},
+	};
+	for(;;){
+	switch(alt(a)){
+		
+
+
+
+
+
+
+
+
+
+	}
+	}
+
 
 	fd = dial(dialstring,0,&cdir[0],&cfd);
 	fprint(1, "DIR: %s\n", cdir);
@@ -101,7 +133,6 @@ threadmain(int argc, char** argv){
 	if(t == 1)
 		fd = tlswrap(fd, addrstr);
 	fprint(2, "DIR: %s\nKEY: %s\nADDR: %s\nSESSION: %s\nSERVER: %d\n",dirst, seckey, addrstr,session_id, server_id);
-
 
 
 	if(w == 1){
@@ -213,7 +244,7 @@ threadmain(int argc, char** argv){
 			free(resp);
 			break;
 		case EHTML:
-			printjson(resp[0]);
+			fprint(1, "FJSON: %J \n\n", ((JSON*)resp[0]));
 			jsonfree(resp[0]);
 			free(resp);
 			break;
