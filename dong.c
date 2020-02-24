@@ -36,7 +36,7 @@ threadmain(int argc, char** argv){
 	long* cl;
 
 	Biobuf* net,*snd;
-	int fd, server_id,t,n,cfd, conspid;
+	int fd, server_id,t,n,cfd, conspid,jdpid;
 	uint i, w;
 
 	dialstring = "net!daijoubu.cf!443";
@@ -102,12 +102,13 @@ threadmain(int argc, char** argv){
 
 	v = chancreate(sizeof(ulong), 0);
 	c = chancreate(sizeof(char*),0);
-	proccreate(jsondriver, c,1024000);
+	jdpid = proccreate(jsondriver, c,1024000);
 
 	sendp(c,v);
+	sendp(c, conu);
+	sendp(c, condat);
 	Alt a[] = {
 		{v, &wsr, CHANRCV},
-		{conu, &csr, CHANRCV},
 		{nil,nil,CHANEND},
 	};
 	for(;;){

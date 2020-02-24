@@ -693,9 +693,8 @@ wsproc(void* arg){
 	chl[1] = proccreate(sendproc, sndc,1024000);
 	sendp(sndc, sv);
 
-	for(;;){
-		Key = alt(a);
- 		switch(Key){
+	for(;;)
+ 		switch(alt(a)){
 			case 0:
  				switch(r){
 					case 1:
@@ -826,7 +825,7 @@ wsproc(void* arg){
 
 				break;
 		}
-	}
+	
 }
 void
 jsondriver(void* arg){
@@ -837,25 +836,28 @@ jsondriver(void* arg){
 
 	c = arg;
 	v = recvp(c);
-
+	consp = recvp(c);
+	cons = recvp(c);
 	Alt a[] = {
 		{v, &rcv, CHANRCV},
 		{consp, &ccv, CHANRCV},
 		{nil,nil,CHANEND},
 
 	};
-	for(;;){
+	for(;;)
 	switch(alt(a)){
 
 		case 1:
 			cmd = recvp(cons);
-
+			if(ccv > 3 && cistrncmp("halt", cmd, 4) == 0)
+				threadexitsall(nil);
+			fprint(1, "%s\n", cmd);
 
 			free(cmd);
 			break;
 	
 
 	}
-	}
+	
 
 }
