@@ -847,7 +847,7 @@ jsondriver(void* arg){
 	char* cmd, *tmpst[2];
  	Site* conns[MAXCONNS], *stmp;
 	int i;
-	uvlong nconns;
+	uvlong nconns, niter;
 	uint rcv, ccv, wcv;
 	JSON* tmp[2];
 
@@ -858,6 +858,9 @@ jsondriver(void* arg){
 
 	nconns = 0;
 	msg = (uchar*)"bunisgay";
+
+	wsp = chancreate(sizeof(ulong), 0);
+	wspp = chancreate(sizeof(char*), 0);
 
 	Alt a[] = {
 		{v, &rcv, CHANRCV},
@@ -900,7 +903,6 @@ jsondriver(void* arg){
 				stmp->dialstr[strlen(tmp[1]->s)] = '\0';
 
 				jsonfree(tmp[0]);
-				free(cmd);
 
 				tmpst[0] = calloc(strlen(stmp->dialstr) + 1, sizeof(char));
 				strcpy(tmpst[0], stmp->dialstr);
@@ -910,7 +912,7 @@ jsondriver(void* arg){
 				stmp->addrstr = calloc(strlen(tmpst[1]) + 1, sizeof(char));
 				strcpy(stmp->addrstr, tmpst[1]);
 				stmp->addrstr[strlen(tmpst[1])] = '\0';
-				free(tmpst[1]);
+				free(tmpst[0]);
 
 				stmp->server_id = rand() % 1000;
 
@@ -922,14 +924,22 @@ jsondriver(void* arg){
 	
 				stmp->seckey = (char*)calloc(80, sizeof(char));
 				enc64(stmp->seckey, 80, msg, 8);
+				stmp->pid = 0;
 				conns[nconns++] = stmp;
+
+			}
+			if(ccv > 3 && cistrncmp("dump", cmd, 4) == 0){
+				fprint(1, "NCONNS: %uld\n", nconns);
+				for(niter=0;niter<nconns;++niter){
+					fprint(1,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tJSN: UNIPM\n\tPID: %d\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+
+				}	
 
 			}
 			free(cmd);
 			break;
 	
 		case 2:
-
 			break;
 	}
 	
