@@ -8,7 +8,7 @@ An ryo websocket implementation as threads is present and comprises the current 
 Then in a seperate terminal
 ```
 	con -C /srv/dialr.cmd
-	sendtf 1 1 5 test
+	connect {"site" : "daijoubu.cf"}
 ```
 
 will be echoed.
