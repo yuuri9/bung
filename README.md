@@ -3,7 +3,7 @@ Implemented are processes for reading the JSON API, and extracting the JSON obje
 An ryo websocket implementation as threads is present and comprises the current bulk of donework, it can be tested by
 ```
 	mk
-	dialr -s net!echo.websocket.org!https
+	dialr
 ```
 Then in a seperate terminal
 ```
