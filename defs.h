@@ -20,8 +20,16 @@ struct Post {
 struct Site{
 	char* dialstr;
 	char* addrstr;
+
+	char* seckey;
+
+	uint server_id;
+	char* session_id;
+
 	JSON* config;
-	Biobuf* net;
+
+	int pid;
+
 };
 
 struct Chunk{

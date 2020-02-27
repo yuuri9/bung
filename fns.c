@@ -652,7 +652,7 @@ void
 wsproc(void* arg){
 	Channel* rv, *sv, *c,*q, *rcvc,*sndc;
 	ulong r,s,h;
-	int Key,fd,i, chl[2];
+	int Key,fd,i, chl[2], pid;
 	Biobuf* net;
 	WSFrame* frame, *sndfrm;
 	uint wsfdep;
@@ -666,6 +666,8 @@ wsproc(void* arg){
 
 	c = arg;
 	q = recvp(c);
+	pid = recvul(q);
+
 	rv = chancreate(sizeof(ulong),0);
 	sv = chancreate(sizeof(ulong),0);
 
@@ -699,10 +701,6 @@ wsproc(void* arg){
  				switch(r){
 					case 1:
 						frame = recvp(rcvc);
-
-						fprint(1, "FRAMEREC: OP: %d LEN: %d\n", frame->op, frame->len);
-						if(frame->len > 0)
-							fprint(1, "PAYLOAD: %s\n", frame->buf);
 
 						/*WARNING: UNTESTED, COULD NOT FIND DISCONTINUOUS REPEATER TEST*/
 						if(frame->fin != 1){
@@ -788,13 +786,15 @@ wsproc(void* arg){
 
 								break;
 							case WTEXT:
-								fprint(2, "%s\n", frame->buf);
+								sendul(q, pid);
+								chanprint(c, "recv %lud %s",frame->len, frame->buf);
  								break;
 							case WHUP:
 							case WBAD:
 								threadkill(chl[0]);
 								threadkill(chl[1]);
-								sendul(q, 42069);
+								sendul(q, pid);
+								chanprint(c, "ending");
 		 						threadexits(nil);
 								break;
 							}
@@ -803,9 +803,11 @@ wsproc(void* arg){
 					case 2:
 						threadkill(chl[0]);
 						threadkill(chl[1]);
-						sendul(q, 42069);
+						sendul(q, pid);
+						chanprint(c, "hangup");
+
 	 					threadexits(nil);
-						break;
+
 				}
 				break;
 
@@ -828,19 +830,39 @@ wsproc(void* arg){
 	
 }
 void
+freesite(Site* site){
+	free(site->dialstr);
+	free(site->addrstr);
+	free(site->seckey);
+	free(site->session_id);
+	if(site->config != nil)
+		jsonfree(site->config);
+	free(site);
+
+}
+void
 jsondriver(void* arg){
-	Channel* c, *v, *cons, *consp;
-	char* cmd;
- 	Site conns[MAXCONNS];
-	uint rcv, ccv;
+	Channel* c, *v, *cons, *consp, *wsp, *wspp;
+	uchar* msg;
+	char* cmd, *tmpst[2];
+ 	Site* conns[MAXCONNS], *stmp;
+	int i;
+	uvlong nconns;
+	uint rcv, ccv, wcv;
+	JSON* tmp[2];
 
 	c = arg;
 	v = recvp(c);
 	consp = recvp(c);
 	cons = recvp(c);
+
+	nconns = 0;
+	msg = (uchar*)"bunisgay";
+
 	Alt a[] = {
 		{v, &rcv, CHANRCV},
 		{consp, &ccv, CHANRCV},
+		{wspp, &wcv, CHANRCV},
 		{nil,nil,CHANEND},
 
 	};
@@ -851,12 +873,64 @@ jsondriver(void* arg){
 			cmd = recvp(cons);
 			if(ccv > 3 && cistrncmp("halt", cmd, 4) == 0)
 				threadexitsall(nil);
-			fprint(1, "%s\n", cmd);
+			if(ccv > 7 && cistrncmp("connect", cmd, 7) == 0){
+				if(nconns >= MAXCONNS){
+					free(cmd);
+					break;
+				}
+				tmp[0] = jsonparse(&cmd[7]); 
+				if(tmp[0] == nil){
+					free(cmd);
+					break;
+				}
+				stmp = calloc(1, sizeof(Site));
+				tmp[1] = jsonbyname(tmp[0], "site");
+				if(tmp[1] == nil){
+					jsonfree( tmp[0]);
+					free(cmd);
+					break;
+				}
+				if(tmp[1]->t != JSONString){
+					jsonfree(tmp[0]);
+					free(cmd);
+					break;
+				}
+				stmp->dialstr = calloc(strlen(tmp[1]->s) + 1, sizeof(char));
+				strcpy(stmp->dialstr,tmp[1]->s);
+				stmp->dialstr[strlen(tmp[1]->s)] = '\0';
 
+				jsonfree(tmp[0]);
+				free(cmd);
+
+				tmpst[0] = calloc(strlen(stmp->dialstr) + 1, sizeof(char));
+				strcpy(tmpst[0], stmp->dialstr);
+				tmpst[0][strlen(stmp->dialstr)] = '\0';
+				strtok(tmpst[0], "!");
+				tmpst[1] = strtok(0, "!");
+				stmp->addrstr = calloc(strlen(tmpst[1]) + 1, sizeof(char));
+				strcpy(stmp->addrstr, tmpst[1]);
+				stmp->addrstr[strlen(tmpst[1])] = '\0';
+				free(tmpst[1]);
+
+				stmp->server_id = rand() % 1000;
+
+				stmp->session_id = (char*)calloc(KEYL, sizeof(char));
+				for(i=0;i<(KEYL - 2);++i){
+					stmp->session_id[i] = (rand() % (0x7a - 0x61)) + 0x61;
+				}
+				stmp->session_id[(KEYL - 1)] = '\0';
+	
+				stmp->seckey = (char*)calloc(80, sizeof(char));
+				enc64(stmp->seckey, 80, msg, 8);
+				conns[nconns++] = stmp;
+
+			}
 			free(cmd);
 			break;
 	
+		case 2:
 
+			break;
 	}
 	
 
