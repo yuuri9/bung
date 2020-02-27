@@ -3,6 +3,7 @@ typedef struct Chunk Chunk;
 typedef struct WSFrame WSFrame;
 typedef struct WSFramel WSFramel;
 typedef struct Site Site;
+typedef struct Url Url;
 
 struct Post {
 	uint error;
@@ -26,10 +27,24 @@ struct Site{
 	uint server_id;
 	char* session_id;
 
+	char* dir;
+
 	JSON* config;
 
 	int pid;
 
+};
+
+struct Url
+{
+	char	*scheme;
+	char	*user;
+	char	*pass;
+	char	*host;
+	char	*port;
+	char	*path;
+	char	*query;
+	char	*fragment;
 };
 
 struct Chunk{
@@ -83,6 +98,7 @@ enum {
 	EHTML,
 	EHTMLINVALID,
 	EDIALFAIL,
+	EMOVED,
 };
 enum {
 	WPING = 0x9,

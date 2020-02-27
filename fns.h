@@ -25,3 +25,7 @@ void
 consfn(void* arg);
 void
 jsondriver(void* arg);
+Url*
+url(char* src, int len);
+void
+freeurl(Url* url);

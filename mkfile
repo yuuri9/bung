@@ -1,10 +1,12 @@
 </$objtype/mkfile
 
 TARG=bung
-all:V: bung dialr
+all:V: bung dialr urlparser
 
 dialr: dong.$O fns.$O 
 	$LD -o dialr dong.$O fns.$O
+urlparser: urlparser.$O fns.$O
+	$LD -o urlparser urlparser.$O fns.$O
 
 bung: main.$O fns.$O clientfns.$O
 	$LD -o bung main.$O fns.$O clientfns.$O
@@ -21,5 +23,8 @@ fns.$O: fns.c
 clientfns.$O: clientfns.c
 	$CC $CFLAGS clientfns.c
 
+urlparser.$O: urlparser.c
+	$CC $CFLAGS urlparser.c
+
 clean:V:
-	rm -f *.[$OS] [$OS].out bung dialr
+	rm -f *.[$OS] [$OS].out bung dialr urlparser

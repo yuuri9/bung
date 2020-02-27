@@ -78,13 +78,18 @@ readhttp(Biobuf* net, long* resp ){
 			i = atoi(&linestr[9]);
 			switch(i){
 				case 404:
-					fprint(1, "FOR OH FOR \n");
 					return ENOTFOUND;
 				case 101:
 				case 200:
 					break;
+				case 300:
+				case 301:
+				case 302:
+				case 303:
+				case 307:
+				case 308:
+					return EMOVED;
 				default:
-					fprint(1, "ERROR CODE %d \n", i);
 					return EGENERIC;
 			}
 		}
@@ -552,7 +557,7 @@ consfn(void* arg){
 	int consfd;
 	char* consfil;
 	char* consinbuf;
-	Biobuf* cons;
+	Biobuf* cons,*conp;
 
 	c = arg;
 	v = recvp(c);
@@ -575,15 +580,22 @@ consfn(void* arg){
 
 	fprint(p[1], "Console initialized %ulld\n", nsec());
 	cons = Bfdopen(p[1], OREAD);
+	conp = Bfdopen(p[1], OWRITE);
+	sendp(c, conp);
 	for(;;){
 		//ADD HELP FN DICKBAG
 		consinbuf = Brdstr(cons, '\n', 1);
-		if(Blinelen(cons) > 3 && cistrncmp(consinbuf,"help",4) == 0 )
-			fprint(p[1], "\thalt\n\tsendtf fin op len buf\n");
-		
-		else if(Blinelen(cons)){
+		if(Blinelen(cons) > 3 && cistrncmp(consinbuf,"help",4) == 0 ){
+			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfigure [siteid] [manual|automatic] {\"\":\"\"}\n");
+			free(consinbuf);
+			Bflush(conp);
+		}
+		else if(Blinelen(cons) > 0){
 			sendul(v, Blinelen(cons));
 			sendp(c,consinbuf);
+		}
+		else{
+			free(consinbuf);
 		}
 	}
 }
@@ -840,12 +852,33 @@ freesite(Site* site){
 	free(site);
 
 }
+
+Biobuf*
+dialsite(Site* site){
+	int fd;
+	if(site->dialstr == nil || site->addrstr == nil)
+		return nil;
+	fd = dial(site->dialstr,nil,nil,nil);
+	if(fd<0)
+		return nil;
+
+	/*We could check for !https/!443 for this,
+	 but in that it does not close on failure we should be fine assuming
+	whatever port we're connecting to is TLS enabled by default*/
+	fd = tlswrap(fd, site->addrstr);
+	if(fd<0)
+		return nil;
+	return Bfdopen(fd, OREAD);
+	
+}
+
 void
 jsondriver(void* arg){
 	Channel* c, *v, *cons, *consp, *wsp, *wspp;
 	uchar* msg;
 	char* cmd, *tmpst[2];
  	Site* conns[MAXCONNS], *stmp;
+	Biobuf* conb;
 	int i;
 	uvlong nconns, niter;
 	uint rcv, ccv, wcv;
@@ -861,6 +894,8 @@ jsondriver(void* arg){
 
 	wsp = chancreate(sizeof(ulong), 0);
 	wspp = chancreate(sizeof(char*), 0);
+
+	conb = recvp(cons);
 
 	Alt a[] = {
 		{v, &rcv, CHANRCV},
@@ -901,6 +936,16 @@ jsondriver(void* arg){
 				stmp->dialstr = calloc(strlen(tmp[1]->s) + 1, sizeof(char));
 				strcpy(stmp->dialstr,tmp[1]->s);
 				stmp->dialstr[strlen(tmp[1]->s)] = '\0';
+				tmp[1] = jsonbyname(tmp[0], "dir");
+				if(tmp[1] == nil || tmp[1]->t != JSONString){
+					stmp->dir = calloc(1, sizeof(char));
+					stmp->dir[0] = '/';
+				}
+				else{
+					stmp->dir = calloc(1 + strlen(tmp[1]->s), sizeof(char));
+					strcpy(stmp->dir, tmp[1]->s);
+					stmp->dir[strlen(tmp[1]->s)] = '\0';
+				}
 
 				jsonfree(tmp[0]);
 
@@ -909,6 +954,13 @@ jsondriver(void* arg){
 				tmpst[0][strlen(stmp->dialstr)] = '\0';
 				strtok(tmpst[0], "!");
 				tmpst[1] = strtok(0, "!");
+				if(tmpst[1] == nil){
+					free(tmpst[0]);
+					free(cmd);
+					break;
+
+				}
+
 				stmp->addrstr = calloc(strlen(tmpst[1]) + 1, sizeof(char));
 				strcpy(stmp->addrstr, tmpst[1]);
 				stmp->addrstr[strlen(tmpst[1])] = '\0';
@@ -928,14 +980,45 @@ jsondriver(void* arg){
 				conns[nconns++] = stmp;
 
 			}
-			if(ccv > 3 && cistrncmp("dump", cmd, 4) == 0){
-				fprint(1, "NCONNS: %uld\n", nconns);
-				for(niter=0;niter<nconns;++niter){
-					fprint(1,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tJSN: UNIPM\n\tPID: %d\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+			if(ccv > 5 && cistrncmp("config", cmd, 6) == 0){
+				
+			}
+			if(ccv > 5 && cistrncmp("search", cmd,6) == 0){
+				tmp[0] = jsonparse(&cmd[7]);
+				if(tmp[0] == nil){
+					free(cmd);
+					break;
+				}
+				tmp[1] = jsonbyname(tmp[0], "site");
+				if(tmp[1] != nil && tmp[1]->t==JSONString){
+					for(niter=0;niter<nconns;++niter){
+						if(cistrcmp(conns[niter]->dialstr, tmp[1]->s) == 0){
+							Bprint(conb, "%uld\n",niter);
+						}
+					}
+				}
+				
 
-				}	
+
+				free(tmp[0]);
+			}
+			if(ccv > 3 && cistrncmp("dump", cmd, 4) == 0){
+
+				if(ccv > 5 && (niter = strtoull(&cmd[4], nil, 0)) < nconns){
+					Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tJSN: UNIPM\n\tPID: %d\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+
+
+				}
+				else{
+					Bprint(conb, "NCONNS: %uld\n", nconns);
+					for(niter=0;niter<nconns;++niter){
+						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tJSN: UNIPM\n\tPID: %d\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+	
+					}
+				}
 
 			}
+			Bflush(conb);
 			free(cmd);
 			break;
 	
@@ -944,4 +1027,42 @@ jsondriver(void* arg){
 	}
 	
 
+}
+void
+freeurl(Url* URL){
+	if(URL->scheme != nil)
+		free(URL->scheme);
+	if(URL->user != nil)
+		free(URL->user);
+	if(URL->pass != nil)
+		free(URL->pass);
+	if(URL->host != nil)
+		free(URL->host);
+	if(URL->port != nil)
+		free(URL->port);
+	if(URL->path != nil)
+		free(URL->path);
+	if(URL->query != nil)
+		free(URL->query);
+	if(URL->fragment != nil)
+		free(URL->fragment);
+	free(URL);
+}
+Url*
+url(char* src, int len){
+	int i,j,k;
+	Url* ret;
+	ret = calloc(1, sizeof(Url));
+	for(i=0;i<len;++i){
+		if(i<(len-3) && strncmp(&src[i],"://",3) == 0){
+			ret->scheme = calloc(i+1, sizeof(char));
+			strncpy(ret->scheme,src,i);
+			ret->scheme[i] = '\0';
+			i+=3;
+			break;
+		}
+
+	}
+
+	return ret;
 }
