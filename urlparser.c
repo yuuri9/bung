@@ -28,9 +28,6 @@ threadmain(int argc, char** argv){
 			src = EARGF(usage());
 			set = 1;
 			continue;
-		default:
-			src = EARGF(usage());
-			continue;
 	}ARGEND
 	if(set==0){
 		if(argc > 0)

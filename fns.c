@@ -61,6 +61,8 @@ readhttp(Biobuf* net, long* resp ){
 	char* ctyp, *nnl, *linestr;
 	for(;;){
 		linestr = Brdstr(net, '', 1);
+		fprint(1, "||| %s\n", linestr);
+		/*DEBUG*/
 		if(Blinelen(net) > 0 && linestr[0] == '\n'){
 			nnl = linestr;
 			linestr = &linestr[1];
@@ -70,7 +72,6 @@ readhttp(Biobuf* net, long* resp ){
 
 		
 		if(Blinelen(net) < 2){
-			fprint(1, "WE ALL DIE \n");
 			break;
 		}
 
@@ -586,7 +587,7 @@ consfn(void* arg){
 		//ADD HELP FN DICKBAG
 		consinbuf = Brdstr(cons, '\n', 1);
 		if(Blinelen(cons) > 3 && cistrncmp(consinbuf,"help",4) == 0 ){
-			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfigure [siteid] [manual|automatic] {\"\":\"\"}\n");
+			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfig [siteid] [manual|automatic] {\"\":\"\"}\n");
 			free(consinbuf);
 			Bflush(conp);
 		}
@@ -852,12 +853,46 @@ freesite(Site* site){
 	free(site);
 
 }
+int
+dialurl(Url* dst, Site* site){
+	int fd;
+	char* addr, *dialstr, *scheme, *port;
 
+	if(dst->host != nil)
+		addr = dst->host;
+	else
+		addr=site->dialstr;
+
+	if(dst->port != nil)
+		port = dst->port;
+	else if(dst->scheme !=nil)
+		port = dst->scheme;
+	else 
+		port = "https";
+
+
+	dialstr = smprint("net!%s!%s", addr, port);
+	fd = dial(dialstr,0,0,0);
+	if(fd<0){
+		free(dialstr);
+		return -1;
+	}
+	fd = tlswrap(fd, addr);
+	if(fd<0){
+		free(dialstr);
+		return -1;
+	}
+
+
+	free(dialstr);
+	return fd;
+}
 Biobuf*
 dialsite(Site* site){
 	int fd;
 	if(site->dialstr == nil || site->addrstr == nil)
 		return nil;
+
 	fd = dial(site->dialstr,nil,nil,nil);
 	if(fd<0)
 		return nil;
@@ -875,14 +910,19 @@ dialsite(Site* site){
 void
 jsondriver(void* arg){
 	Channel* c, *v, *cons, *consp, *wsp, *wspp;
+
 	uchar* msg;
 	char* cmd, *tmpst[2];
- 	Site* conns[MAXCONNS], *stmp;
-	Biobuf* conb;
-	int i;
-	uvlong nconns, niter;
+
+	int i,rcod;
 	uint rcv, ccv, wcv;
+	long cl;
+	uvlong nconns, niter;
+
 	JSON* tmp[2];
+ 	Site* conns[MAXCONNS], *stmp;
+	Biobuf* conb, *dialb;
+
 
 	c = arg;
 	v = recvp(c);
@@ -980,8 +1020,29 @@ jsondriver(void* arg){
 				conns[nconns++] = stmp;
 
 			}
-			if(ccv > 5 && cistrncmp("config", cmd, 6) == 0){
+			if(ccv > 7 && cistrncmp("config", cmd, 6) == 0 && (niter=strtoull(&cmd[6],nil,0)) < nconns){
+				fprint(1, "%uld\n", niter);
+
+				dialb = dialsite(conns[niter]);
+				if(dialb == nil){
+					free(cmd);
+					break;
+				}
+				/*Dialsite checks addr/dial str validity*/
+					fprint(1,"GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->addrstr);
+				if(conns[niter]->dir !=nil)
+					Bprint(dialb,"GET /%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->dir, conns[niter]->addrstr);
+				else
+					Bprint(dialb,"GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->addrstr);
+
+				Bflush(dialb);
 				
+				
+				rcod = readhttp(dialb, &cl);
+
+
+				Bterm(dialb);
+				fprint(1, "ENDDDD\n");
 			}
 			if(ccv > 5 && cistrncmp("search", cmd,6) == 0){
 				tmp[0] = jsonparse(&cmd[7]);
@@ -1046,7 +1107,7 @@ freeurl(Url* URL){
 }
 Url*
 url(char* src, int len){
-	int i,j,k;
+	int i,j;
 	Url* ret;
 	ret = calloc(1, sizeof(Url));
 	for(i=0;i<len;++i){
@@ -1059,6 +1120,47 @@ url(char* src, int len){
 		}
 
 	}
-	
+	if(ret->scheme == nil){
+		i=0;
+	}
+	for(j=i;j<len;++j){
+		if(src[j] == ':' || src[j] == '/'){
+			ret->host = calloc(1 + (j-i), sizeof(char));
+			strncpy(ret->host, &src[i], (j-i));
+			ret->host[j-i] = '\0';
+			break;
+		}
+	}
+	if(j==len && ret->host == nil){
+		ret->host = calloc(len - i + 1, sizeof(char));
+		strncpy(ret->host, &src[i], len - i);
+		ret->host[len-i] = '\0';
+		return ret;
+	}
+
+	i=j;
+	if(src[i] == ':' && i++<(len-1)){
+		for(j=i;j<len;++j){
+			if(src[j] == '/'){
+				ret->port = calloc(1+(j-i), sizeof(char));
+				strncpy(ret->port, &src[i], j-i);
+				ret->port[j-i] = '\0';
+				break;
+			}
+		}
+		if(j==len && ret->port == nil){
+			ret->port = calloc(len-i + 1, sizeof(char));
+			strncpy(ret->port, &src[i], len-i);
+			ret->port[len-i] = '\0';
+			return ret;
+		}
+	}
+
+	i=j;
+	if(src[i] == '/' && i++<(len-1)){
+		ret->path = calloc(len-i + 1, sizeof(char));
+		strncpy(ret->path, &src[i], len-i);
+		ret->path[len-i] = '\0';	
+	}
 	return ret;
 }

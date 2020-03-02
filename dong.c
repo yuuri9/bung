@@ -205,7 +205,7 @@ threadmain(int argc, char** argv){
 
 
 	/*Dial normal*/
-	fprint(fd, "GET /%s HTTP/1.1\nHost: %s\nUser-Agent: Mozilla/4.0 (compatible; hjdicks; 9front 1.0)\n\n", dirst, addrstr);
+	fprint(fd, "GET /%s HTTP/1.1\nHost: %s\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\n\n", dirst, addrstr);
 
 
 
