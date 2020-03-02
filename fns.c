@@ -1028,24 +1028,20 @@ jsondriver(void* arg){
 	
 
 }
+
+/*This differs from Url in mothra/url.c in that 
+it supports only a subset of valid URLs excluding
+basic auth, queries, and fragmentation*/
 void
 freeurl(Url* URL){
 	if(URL->scheme != nil)
 		free(URL->scheme);
-	if(URL->user != nil)
-		free(URL->user);
-	if(URL->pass != nil)
-		free(URL->pass);
 	if(URL->host != nil)
 		free(URL->host);
 	if(URL->port != nil)
 		free(URL->port);
 	if(URL->path != nil)
 		free(URL->path);
-	if(URL->query != nil)
-		free(URL->query);
-	if(URL->fragment != nil)
-		free(URL->fragment);
 	free(URL);
 }
 Url*
@@ -1063,6 +1059,6 @@ url(char* src, int len){
 		}
 
 	}
-
+	
 	return ret;
 }

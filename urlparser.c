@@ -43,6 +43,6 @@ threadmain(int argc, char** argv){
 		usage();
 
 	URL = url(src, strlen(src));
-	fprint(1, "Scheme: %s\nUser: %s\nPass: %s\nHost: %s\nPort: %s\nPath: %s\nQuery: %s\nFragment: %s\n", URL->scheme, URL->user, URL->pass, URL->host, URL->port, URL->path, URL->query, URL->fragment);	
+	fprint(1, "Scheme: %s\nHost: %s\nPort: %s\nPath: %s\n", URL->scheme , URL->host, URL->port, URL->path);	
 	freeurl(URL);
 }

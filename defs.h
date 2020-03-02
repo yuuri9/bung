@@ -38,13 +38,9 @@ struct Site{
 struct Url
 {
 	char	*scheme;
-	char	*user;
-	char	*pass;
 	char	*host;
 	char	*port;
 	char	*path;
-	char	*query;
-	char	*fragment;
 };
 
 struct Chunk{
