@@ -74,7 +74,7 @@ readhttp(Biobuf* net, long* resp ){
 		if(Blinelen(net) < 2){
 			break;
 		}
-
+		/*
 		if(Blinelen(net) > 9 && (strncmp(linestr, "HTTP", 4) == 0)){
 			i = atoi(&linestr[9]);
 			switch(i){
@@ -94,7 +94,7 @@ readhttp(Biobuf* net, long* resp ){
 					return EGENERIC;
 			}
 		}
-
+		*/
 
 
 		if(Blinelen(net) > 16 && (cistrncmp(linestr, "content-length:", 15) == 0)){
@@ -979,7 +979,7 @@ jsondriver(void* arg){
 				tmp[1] = jsonbyname(tmp[0], "dir");
 				if(tmp[1] == nil || tmp[1]->t != JSONString){
 					stmp->dir = calloc(1, sizeof(char));
-					stmp->dir[0] = '/';
+					stmp->dir[0] = '\0';
 				}
 				else{
 					stmp->dir = calloc(1 + strlen(tmp[1]->s), sizeof(char));
@@ -1021,29 +1021,30 @@ jsondriver(void* arg){
 
 			}
 			if(ccv > 7 && cistrncmp("config", cmd, 6) == 0 && (niter=strtoull(&cmd[6],nil,0)) < nconns){
-				fprint(1, "%uld\n", niter);
-
+ 
 				dialb = dialsite(conns[niter]);
+
 				if(dialb == nil){
 					free(cmd);
 					break;
 				}
 				/*Dialsite checks addr/dial str validity*/
-					fprint(1,"GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->addrstr);
+			 	/*Bprint does not seem to work: if we Bflush then we've flushed
+				out all the return data from the site, if we don't Bflush then
+				the reads to the buffer consume the string meant to be sent to the
+				site. A more proper solution would be two buffers (OREAD, OWRITE) but
+				fprinting to the FD works too*/
+ 
 				if(conns[niter]->dir !=nil)
-					Bprint(dialb,"GET /%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->dir, conns[niter]->addrstr);
+					fprint(Bfildes(dialb),"GET /%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->dir, conns[niter]->addrstr);
 				else
-					Bprint(dialb,"GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->addrstr);
+					fprint(Bfildes(dialb),"GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->addrstr);
 
-				Bflush(dialb);
-				
-				
 				rcod = readhttp(dialb, &cl);
-
+				
 
 				Bterm(dialb);
-				fprint(1, "ENDDDD\n");
-			}
+ 			}
 			if(ccv > 5 && cistrncmp("search", cmd,6) == 0){
 				tmp[0] = jsonparse(&cmd[7]);
 				if(tmp[0] == nil){
