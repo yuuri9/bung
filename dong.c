@@ -240,8 +240,7 @@ threadmain(int argc, char** argv){
 		case EJSON:
 			fprint(1, "J-TYPE: %d\n",((JSON*)resp[0])->t);
 
-			printjson(resp[0]);
-			jsonfree(resp[0]);
+ 			jsonfree(resp[0]);
 			free(resp);
 			break;
 		case EHTML:

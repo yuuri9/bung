@@ -61,8 +61,6 @@ readhttp(Biobuf* net, long* resp ){
 	char* ctyp, *nnl, *linestr;
 	for(;;){
 		linestr = Brdstr(net, '', 1);
-		fprint(1, "||| %s\n", linestr);
-		/*DEBUG*/
 		if(Blinelen(net) > 0 && linestr[0] == '\n'){
 			nnl = linestr;
 			linestr = &linestr[1];
@@ -74,7 +72,6 @@ readhttp(Biobuf* net, long* resp ){
 		if(Blinelen(net) < 2){
 			break;
 		}
-		/*
 		if(Blinelen(net) > 9 && (strncmp(linestr, "HTTP", 4) == 0)){
 			i = atoi(&linestr[9]);
 			switch(i){
@@ -94,7 +91,6 @@ readhttp(Biobuf* net, long* resp ){
 					return EGENERIC;
 			}
 		}
-		*/
 
 
 		if(Blinelen(net) > 16 && (cistrncmp(linestr, "content-length:", 15) == 0)){
@@ -270,15 +266,15 @@ recievehtml(Biobuf* net, long cl, JSON** ret){
 	char* buf, *lbuf, *jstr;
 	Biobuf* nnt;
 	int p[2], i;
- 	buf = recvcontent(net, cl);
-	if(buf == nil)
+  	buf = recvcontent(net, cl);
+ 	if(buf == nil)
 		return ESIZEWRONG;
   
 	pipe(p);
 	nnt = Bfdopen(p[1], OREAD);
 	fprint(p[0], "%s", buf);
 	for(;;){
-		lbuf = Brdstr(nnt,'<',1);
+		lbuf = Brdstr(nnt, '<', 1);
 		if(Blinelen(nnt) > 21 && strncmp(lbuf,"script>var imports =",20) == 0){
 			jstr = (char*)calloc(Blinelen(nnt), sizeof(char));
 			strncpy(jstr, &lbuf[21], Blinelen(nnt) - 21);
@@ -300,67 +296,6 @@ recievehtml(Biobuf* net, long cl, JSON** ret){
 
 	return EHTML;
 	
-}
-void
-printjson(JSON* root){
-	JSONEl* tail;
-	JSON* jtm;
-
-	switch(root->t){
-		case JSONNull:
-			fprint(1, "null \n");
-			break;
-		case JSONBool:
-			fprint(1, "bool\n");
-			break;
-		case JSONNumber:
-			fprint(1, "2dbl? %.0f\n", root->n);
-			break;
-		case JSONString:
-			fprint(1,"3str? %s\n",root->s);
-			break;
-		case JSONArray:
-			for(tail=root->first;;){
-				printjson(tail->val);
-				if(tail->next == nil)
-					break;
-				tail = tail->next;
-			}
-				
-			break;
-		case JSONObject:
-			jtm = jsonbyname(root, "num");
-			/*<nil> or errstr*/
-			if(jtm == nil)
-				fprint(1, "NOPOSTNUMBER\n");
-			else
-				printjson(jtm);
-
-			jtm = jsonbyname(root, "name");
-			if(jtm == nil)
-				fprint(1, "3str? Anonymous\n");
-			else
-				printjson(jtm);
-
-			jtm = jsonbyname(root, "body");
-			if(jtm == nil)
-				fprint(1, "JISAKUJIENS\n");
-			else
-				printjson(jtm);
-			jtm = jsonbyname(root, "SOCKET_PATH");
-			if(jtm == nil)
-				fprint(1, "noconf\n");
-			else
-				printjson(jtm);
-
-			jtm = jsonbyname(root, "config");
-			if(jtm == nil)
-				break;
-			else
-				printjson(jtm);
-
-			break;
-	}
 }
 void
 freewsf(WSFrame* frame){
@@ -501,7 +436,6 @@ recvheaders(Biobuf* net){
 					break;
 
 				case 301:
-					fprint(2,"MOVED PERMANENTLY: %s\n",buf);
 				default:
 					free(nnl);
 					return EHTMLINVALID;
@@ -587,7 +521,7 @@ consfn(void* arg){
 		//ADD HELP FN DICKBAG
 		consinbuf = Brdstr(cons, '\n', 1);
 		if(Blinelen(cons) > 3 && cistrncmp(consinbuf,"help",4) == 0 ){
-			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfig [siteid] [manual|automatic] {\"\":\"\"}\n");
+			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfig [siteid]\n\tmconfig [siteid] {\"\" : \"\"} \n");
 			free(consinbuf);
 			Bflush(conp);
 		}
@@ -696,7 +630,7 @@ wsproc(void* arg){
 
 	i = recvheaders(net);
 	if(i!=EOK){
-		sendul(q,42069);
+		sendul(q,pid);
 		threadexits(nil);
 	}
 	rcvc = chancreate(sizeof(WSFrame*),0);
@@ -853,15 +787,14 @@ freesite(Site* site){
 	free(site);
 
 }
-int
+Biobuf*
 dialurl(Url* dst, Site* site){
 	int fd;
 	char* addr, *dialstr, *scheme, *port;
-
-	if(dst->host != nil)
+	if(dst->host != nil && dst->host[0] != '\0')
 		addr = dst->host;
 	else
-		addr=site->dialstr;
+		addr=site->addrstr;
 
 	if(dst->port != nil)
 		port = dst->port;
@@ -875,17 +808,17 @@ dialurl(Url* dst, Site* site){
 	fd = dial(dialstr,0,0,0);
 	if(fd<0){
 		free(dialstr);
-		return -1;
+		return nil;
 	}
 	fd = tlswrap(fd, addr);
 	if(fd<0){
 		free(dialstr);
-		return -1;
+		return nil;
 	}
 
 
 	free(dialstr);
-	return fd;
+	return Bfdopen(fd, OREAD);
 }
 Biobuf*
 dialsite(Site* site){
@@ -912,7 +845,7 @@ jsondriver(void* arg){
 	Channel* c, *v, *cons, *consp, *wsp, *wspp;
 
 	uchar* msg;
-	char* cmd, *tmpst[2];
+	char* cmd, *tmpst[2], *line;
 
 	int i,rcod;
 	uint rcv, ccv, wcv;
@@ -922,7 +855,7 @@ jsondriver(void* arg){
 	JSON* tmp[2];
  	Site* conns[MAXCONNS], *stmp;
 	Biobuf* conb, *dialb;
-
+	Url* urlrdr;
 
 	c = arg;
 	v = recvp(c);
@@ -1021,6 +954,7 @@ jsondriver(void* arg){
 
 			}
 			if(ccv > 7 && cistrncmp("config", cmd, 6) == 0 && (niter=strtoull(&cmd[6],nil,0)) < nconns){
+				cl = 0;
  
 				dialb = dialsite(conns[niter]);
 
@@ -1041,10 +975,86 @@ jsondriver(void* arg){
 					fprint(Bfildes(dialb),"GET / HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->addrstr);
 
 				rcod = readhttp(dialb, &cl);
-				
+				if(rcod == ENOTFOUND){
+					free(cmd);
+					Bterm(dialb);
+					break;
+				}
+				if(rcod == EMOVED){
+					urlrdr = nil;
+					for(;;){
+						line = Brdstr(dialb,'',1);
+						if(Blinelen(dialb) < 2){
+							break;
+						}
 
+						if(Blinelen(dialb) > 11 && cistrncmp("Location: ", &line[1], 10) == 0)
+							urlrdr = url(&line[11], Blinelen(dialb) - 10);
+						
+ 
+		
+
+						free(line);
+					}
+
+					if(urlrdr == nil){
+						free(cmd);
+						break;
+					}
+					Bterm(dialb);
+
+					dialb = dialurl(urlrdr, conns[niter]);
+					if(dialb == nil){
+						freeurl(urlrdr);
+						free(cmd);
+					
+	break;
+					}
+					fprint(Bfildes(dialb), "GET /%s HTTP/1.1\r\nHost: %s\r\n\r\n", urlrdr->path, ((urlrdr->host == nil || urlrdr->host[0] == '\0')?conns[niter]->addrstr:urlrdr->host));
+					freeurl(urlrdr);
+					rcod = readhttp(dialb, &cl);
+				}
+
+				switch(rcod){
+					case EJSON:
+						rcod = recievejson(dialb, cl, tmp);
+						break;
+					case EHTML:
+						rcod = recievehtml(dialb, cl, tmp);
+						break;
+					default:
+						rcod = EGENERIC;
+						break;
+				}
+
+				switch(rcod){
+					case EJSON:
+					case EHTML:
+						if(conns[niter]->config != nil)
+							jsonfree(conns[niter]->config);
+
+						conns[niter]->config = tmp[0];
+						break;
+					default:
+						if(tmp[0] != nil)
+							jsonfree(tmp[0]);
+						break;
+				}
+
+				
 				Bterm(dialb);
  			}
+			if(ccv > 7 && cistrncmp("mconfig", cmd, 7) == 0&& (niter=strtoull(&cmd[7],&tmpst[0],0)) < nconns){
+				tmp[0] = jsonparse(tmpst[0]);
+				if(tmp[0] == nil){
+					free(cmd);
+					break;
+				}
+				if(conns[niter]->config != nil)
+					jsonfree(conns[niter]->config);
+				conns[niter]->config = tmp[0];
+				
+			}
 			if(ccv > 5 && cistrncmp("search", cmd,6) == 0){
 				tmp[0] = jsonparse(&cmd[7]);
 				if(tmp[0] == nil){
@@ -1067,14 +1077,22 @@ jsondriver(void* arg){
 			if(ccv > 3 && cistrncmp("dump", cmd, 4) == 0){
 
 				if(ccv > 5 && (niter = strtoull(&cmd[4], nil, 0)) < nconns){
-					Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tJSN: UNIPM\n\tPID: %d\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+					if(conns[niter]->config != nil)
+						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d\nCONF: %J\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid, conns[niter]->config);
+					else
+						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d \n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+
 
 
 				}
 				else{
 					Bprint(conb, "NCONNS: %uld\n", nconns);
 					for(niter=0;niter<nconns;++niter){
-						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tJSN: UNIPM\n\tPID: %d\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+						if(conns[niter]->config != nil)
+							Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d\nCONF: %J\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid, conns[niter]->config);
+						else
+							Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d \n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+
 	
 					}
 				}

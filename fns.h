@@ -12,8 +12,6 @@ int
 readhttp(Biobuf* net, long* resp );
 int
 recievejson(Biobuf* net, long cl, JSON** ret);
-void
-printjson(JSON* root);
 int
 recievehtml(Biobuf* net, long cl, JSON** ret);
 int
