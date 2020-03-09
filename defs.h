@@ -28,8 +28,12 @@ struct Site{
 	char* session_id;
 
 	char* dir;
+	char* apidir;
 
 	JSON* config;
+	
+	int nboards;
+	JSON** threads;
 
 	int pid;
 

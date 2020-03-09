@@ -778,12 +778,20 @@ wsproc(void* arg){
 }
 void
 freesite(Site* site){
+	int i;
 	free(site->dialstr);
 	free(site->addrstr);
 	free(site->seckey);
 	free(site->session_id);
 	if(site->config != nil)
 		jsonfree(site->config);
+	if(site->nboards > 0)
+		for(i=0;i<site->nboards;++i)
+			if(site->threads[i] != nil)
+				jsonfree(site->threads[i]);
+		
+		free(site->threads);
+
 	free(site);
 
 }
@@ -853,6 +861,7 @@ jsondriver(void* arg){
 	uvlong nconns, niter;
 
 	JSON* tmp[2];
+	JSONEl* jltmp;
  	Site* conns[MAXCONNS], *stmp;
 	Biobuf* conb, *dialb;
 	Url* urlrdr;
@@ -950,8 +959,11 @@ jsondriver(void* arg){
 				stmp->seckey = (char*)calloc(80, sizeof(char));
 				enc64(stmp->seckey, 80, msg, 8);
 				stmp->pid = 0;
-				conns[nconns++] = stmp;
+				stmp->apidir = calloc(5,sizeof(char));
+				strncpy(stmp->apidir, "/api",4);
+				stmp->nboards = 0;
 
+				conns[nconns++] = stmp;
 			}
 			if(ccv > 7 && cistrncmp("config", cmd, 6) == 0 && (niter=strtoull(&cmd[6],nil,0)) < nconns){
 				cl = 0;
@@ -1043,6 +1055,17 @@ jsondriver(void* arg){
 
 				
 				Bterm(dialb);
+				if(conns[niter]->config != nil && (tmp[0] = jsonbyname(conns[niter]->config, "config")) != nil && (tmp[1] = jsonbyname(tmp[0], "SOCKET_PATH")) != nil && tmp[1]->t == JSONString)
+					conns[niter]->dir = tmp[1]->s;
+				
+				if(conns[niter]->config != nil && (tmp[0] = jsonbyname(conns[niter]->config, "config")) != nil && (tmp[1] = jsonbyname(tmp[0], "BOARDS")) != nil && tmp[1]->t == JSONArray){
+					for(i=0,jltmp=tmp[1]->first;jltmp != nil;++i)
+						jltmp = jltmp->next;
+					conns[niter]->nboards = i;
+					conns[niter]->threads = calloc(i, sizeof(JSON*));
+
+				}
+
  			}
 			if(ccv > 7 && cistrncmp("mconfig", cmd, 7) == 0&& (niter=strtoull(&cmd[7],&tmpst[0],0)) < nconns){
 				tmp[0] = jsonparse(tmpst[0]);
@@ -1053,7 +1076,16 @@ jsondriver(void* arg){
 				if(conns[niter]->config != nil)
 					jsonfree(conns[niter]->config);
 				conns[niter]->config = tmp[0];
-				
+				if(conns[niter]->config != nil && (tmp[0] = jsonbyname(conns[niter]->config, "config")) != nil && (tmp[1] = jsonbyname(tmp[0], "SOCKET_PATH")) != nil && tmp[1]->t == JSONString){
+					conns[niter]->dir = tmp[1]->s;
+				}
+				if(conns[niter]->config != nil && (tmp[0] = jsonbyname(conns[niter]->config, "config")) != nil && (tmp[1] = jsonbyname(tmp[0], "BOARDS")) != nil && tmp[1]->t == JSONArray){
+					for(i=0,jltmp=tmp[1]->first;jltmp != nil;++i)
+						jltmp = jltmp->next;
+					conns[niter]->nboards = i;
+					conns[niter]->threads = calloc(i, sizeof(JSON*));
+
+				}
 			}
 			if(ccv > 5 && cistrncmp("search", cmd,6) == 0){
 				tmp[0] = jsonparse(&cmd[7]);
@@ -1097,6 +1129,21 @@ jsondriver(void* arg){
 					}
 				}
 
+			}
+			if(ccv > 6 && strncmp("threads", cmd, 7) == 0&& (niter=strtoull(&cmd[7],&tmpst[0],0)) < nconns){
+				if(conns[niter]->apidir == nil){
+					free(cmd);
+					break;
+				}
+				dialb = dialsite(conns[niter]);
+				if(dialb == nil){
+					free(cmd);
+					break;
+				}
+
+				/*Need board from JSON*/
+				//fprint(Bfildes(dialb), "GET %s/board/%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->apidir, conns[niter]-> );
+				
 			}
 			Bflush(conb);
 			free(cmd);
