@@ -518,10 +518,9 @@ consfn(void* arg){
 	conp = Bfdopen(p[1], OWRITE);
 	sendp(c, conp);
 	for(;;){
-		//ADD HELP FN DICKBAG
 		consinbuf = Brdstr(cons, '\n', 1);
 		if(Blinelen(cons) > 3 && cistrncmp(consinbuf,"help",4) == 0 ){
-			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfig [siteid]\n\tmconfig [siteid] {\"\" : \"\"} \n");
+			Bprint(conp, "\thalt\n\tdump [id]\n\tsearch {\"site\":\"net!website.org!https\", \"board\" : \"/liveboard/\"}\n\tconnect { \"site\" : \"net!website.org!https\" }\n\tconfig [siteid]\n\tmconfig [siteid] {\"\" : \"\"} \n\t threads [siteid] [boardindex]\n\topen [siteid]\n");
 			free(consinbuf);
 			Bflush(conp);
 		}
@@ -730,7 +729,7 @@ wsproc(void* arg){
  
 								sendp(sndc, sndfrm);
 								sendp(sndc, &fd);
-
+								chanprint(c,"RECV PING\n");
 								break;
 							case WTEXT:
 								sendul(q, pid);
@@ -855,7 +854,7 @@ jsondriver(void* arg){
 	uchar* msg;
 	char* cmd, *tmpst[2], *line;
 
-	int i,rcod;
+	int i,j,rcod;
 	uint rcv, ccv, wcv;
 	long cl;
 	uvlong nconns, niter;
@@ -1110,12 +1109,14 @@ jsondriver(void* arg){
 
 				if(ccv > 5 && (niter = strtoull(&cmd[4], nil, 0)) < nconns){
 					if(conns[niter]->config != nil)
-						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d\nCONF: %J\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid, conns[niter]->config);
+						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d\nCONF: %J\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid, conns[niter]->config);
 					else
-						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d \n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+						Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d \n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
 
-
-
+					for(i=0;i<conns[niter]->nboards;++i)
+						if(conns[niter]->threads[i] != nil)
+							Bprint(conb, "THREADS: %J\n", conns[niter]->threads[i]);
+					Bprint(conb, "\n\n");
 				}
 				else{
 					Bprint(conb, "NCONNS: %uld\n", nconns);
@@ -1123,14 +1124,64 @@ jsondriver(void* arg){
 						if(conns[niter]->config != nil)
 							Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d\nCONF: %J\n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid, conns[niter]->config);
 						else
-							Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d \n\n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
+							Bprint(conb,"SNUM: %uld \n\tDSTR: %s\n\tASTR: %s\n\tSEC: %s\n\tSER: %ud\n\tSES: %s\n\tPID: %d \n",niter,conns[niter]->dialstr, conns[niter]->addrstr, conns[niter]->seckey, conns[niter]->server_id, conns[niter]->session_id, conns[niter]->pid);
 
-	
+
+						for(i=0;i<conns[niter]->nboards;++i)
+							if(conns[niter]->threads[i] != nil)
+								Bprint(conb, "THREADS: %J\n", conns[niter]->threads[i]);
+						Bprint(conb, "\n\n");
+
 					}
 				}
 
 			}
+			if(ccv > 4 && (strncmp("open", cmd, 4)) == 0 && (niter=strtoull(&cmd[4], &tmpst[0],0)) < nconns){
+				if(conns[niter]->config == nil){
+					free(cmd);
+					break;
+				}
+				tmp[0] = jsonbyname(conns[niter]->config, "SOCKET_URL");
+				tmp[1] = jsonbyname(conns[niter]->config, "SOCKET_PATH");
+				if((tmp[0] == nil || tmp[0]->t != JSONString) && (tmp[1] == nil || tmp[1]->t != JSONString)){
+					
+					free(cmd);
+					break;
+				}
+				if((tmp[0] == nil || tmp[0]->t != JSONString) && tmp[1]->t == JSONString){
+					dialb = dialsite(conns[niter]);
+					tmpst[0] = smprint("%s/%d/%s/websocket",tmp[1]->s,conns[niter]->server_id,conns[niter]->session_id);
+
+				}
+				else if((tmp[1] == nil || tmp[1]->t != JSONString) && tmp[0]->t == JSONString){
+					urlrdr = url(tmp[1]->s,strlen(tmp[1]->s));
+					dialb = dialurl(urlrdr, conns[niter]);
+					freeurl(urlrdr);
+
+					/*Untested: No sites seem to support this, contact if in error*/
+					tmpst[0] = smprint("%s",tmp[0]->s);
+				}
+				else{
+					free(cmd);
+					break;
+				}
+				if(dialb == nil){
+					free(cmd);
+					break;
+				}
+				fprint(Bfildes(dialb),"GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Protocol: chat,superchat\r\nSec-WebSocket-Version: 13\r\nOrigin:%s\r\n\r\n",tmpst[0],conns[niter]->addrstr,conns[niter]->seckey,conns[niter]->addrstr);
+				conns[niter]->pid = proccreate(wsproc,wspp,1024000);
+				sendp(wspp,wsp);
+				sendul(wsp,conns[niter]->pid);
+				sendp(wspp, dialb);
+				free(tmpst);
+
+			}
 			if(ccv > 6 && strncmp("threads", cmd, 7) == 0&& (niter=strtoull(&cmd[7],&tmpst[0],0)) < nconns){
+				if(conns[niter]->config == nil){
+					free(cmd);
+					break;
+				}
 				if(conns[niter]->apidir == nil){
 					free(cmd);
 					break;
@@ -1140,16 +1191,54 @@ jsondriver(void* arg){
 					free(cmd);
 					break;
 				}
+				i = atoi(tmpst[0]);
+				if(i >= conns[niter]->nboards){
+					free(cmd);
+					break;
+				}
+				tmp[0] = jsonbyname(conns[niter]->config, "config");
+				if(tmp[0] == nil){
+					free(cmd);
+					break;
+				}
+				tmp[1] = jsonbyname(tmp[0], "BOARDS");
+				if(tmp[1] == nil || tmp[1]->first == nil){
+					free(cmd);
+					break;
+				}
+				jltmp = tmp[1]->first;
+				for(j=0,jltmp=tmp[1]->first;j<i;++j,jltmp=jltmp->next)
+					if(jltmp == nil || jltmp->val->t != JSONString){
+						free(cmd);
+						break;
+					}
+
 
 				/*Need board from JSON*/
-				//fprint(Bfildes(dialb), "GET %s/board/%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->apidir, conns[niter]-> );
+				fprint(Bfildes(dialb), "GET %s/board/%s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/69.0 (compatible; hjdicks; 9front 1.0)\r\n\r\n",conns[niter]->apidir, jltmp->val->s );
+				rcod = readhttp(dialb, &cl);
+				if(rcod != EJSON){
+					free(cmd);
+					break;
+				}
+				rcod = recievejson(dialb, cl, &(conns[niter]->threads[i]));
+				if(rcod != EJSON || conns[niter]->threads[i] == nil){
+					free(cmd);
+					break;
+				}
+
 				
 			}
+
 			Bflush(conb);
 			free(cmd);
 			break;
 	
 		case 2:
+			cmd = recvp(wspp);
+			Bprint(conb, "%s", cmd);
+			Bflush(conb);
+			free(cmd);
 			break;
 	}
 	
